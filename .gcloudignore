@@ -1,0 +1,7 @@
+.gcloudignore
+.git
+#!include:.gitignore
+**/node_modules
+**/.next
+**/__pycache__
+deploy/api-env.yaml

@@ -1,0 +1,17 @@
+services:
+  api:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google.json
+    volumes:
+      - type: bind
+        source: ${GOOGLE_CREDENTIALS_FILE:?Set GOOGLE_CREDENTIALS_FILE to your private ADC or service-account JSON path}
+        target: /run/secrets/google.json
+        read_only: true
+  worker:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google.json
+    volumes:
+      - type: bind
+        source: ${GOOGLE_CREDENTIALS_FILE:?Set GOOGLE_CREDENTIALS_FILE to your private ADC or service-account JSON path}
+        target: /run/secrets/google.json
+        read_only: true

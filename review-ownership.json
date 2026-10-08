@@ -33,6 +33,12 @@
       "assignment_basis": "Explicit user assignment: the whole frontend and frontend tests belong to Deepthi",
       "scopes": ["frontend/**"],
       "related_to": null
+    },
+    "pitchgrill-runtime": {
+      "author": 2,
+      "weight": 2,
+      "scopes": [".dockerignore", ".env.example", ".gcloudignore", ".gitattributes", ".gitignore", "README.md", "compose.google.yaml", "compose.yaml", "deploy/**", "docs/demo.md", "docs/design.md", "docs/google-cloud.md", "docs/validation.md", "scripts/run.ps1", "scripts/run.py", "scripts/run.sh"],
+      "related_to": "pitchgrill-frontend"
     }
   }
 }

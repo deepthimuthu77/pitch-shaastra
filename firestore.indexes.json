@@ -1,1 +1,10 @@
-{"indexes":[],"fieldOverrides":[]}
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {"collectionGroup": "analyses", "fieldPath": "updated", "indexes": [{"order": "ASCENDING", "queryScope": "COLLECTION_GROUP"}, {"order": "ASCENDING", "queryScope": "COLLECTION"}, {"order": "DESCENDING", "queryScope": "COLLECTION"}]},
+    {"collectionGroup": "pitches", "fieldPath": "updated", "indexes": [{"order": "ASCENDING", "queryScope": "COLLECTION_GROUP"}, {"order": "ASCENDING", "queryScope": "COLLECTION"}, {"order": "DESCENDING", "queryScope": "COLLECTION"}]},
+    {"collectionGroup": "shares", "fieldPath": "updated", "indexes": [{"order": "ASCENDING", "queryScope": "COLLECTION_GROUP"}, {"order": "ASCENDING", "queryScope": "COLLECTION"}, {"order": "DESCENDING", "queryScope": "COLLECTION"}]},
+    {"collectionGroup": "calls", "fieldPath": "updated", "indexes": [{"order": "ASCENDING", "queryScope": "COLLECTION_GROUP"}, {"order": "ASCENDING", "queryScope": "COLLECTION"}, {"order": "DESCENDING", "queryScope": "COLLECTION"}]},
+    {"collectionGroup": "invites", "fieldPath": "updated", "indexes": [{"order": "ASCENDING", "queryScope": "COLLECTION_GROUP"}, {"order": "ASCENDING", "queryScope": "COLLECTION"}, {"order": "DESCENDING", "queryScope": "COLLECTION"}]}
+  ]
+}

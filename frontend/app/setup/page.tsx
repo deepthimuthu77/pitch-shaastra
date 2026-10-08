@@ -56,11 +56,12 @@ export default function Setup() {
         <div className="setup-step">
           <span>01</span>
           <div>
-            <h3>Practice in the pitch room.</h3>
+            <h3>Enter the tank.</h3>
             <p>
-              Describe the idea, choose a difficulty, and answer questions by
-              typing or speaking. Follow-ups target your gaps. Finish for a
-              scorecard, rewritten pitch and prep sheet.
+              State your investment ask, face the panel by typing or speaking,
+              and defend your answers under pressure. Hear the verdict,
+              negotiate fictional offers or walk away. Your coaching report
+              helps afterward.
             </p>
             <Link href="/pitch" className="text-link">
               Enter the room <ArrowRight size={14} />
@@ -120,7 +121,7 @@ export default function Setup() {
         <div className="setup-step">
           <span>02</span>
           <div>
-            <h3>Configure Firebase and Gemini.</h3>
+            <h3>Connect Groq, Firebase and Google research.</h3>
             <p>
               Create a Firebase project, enable Google and Anonymous sign-in,
               create Firestore, and register a web app. Put keys in the root
@@ -128,7 +129,7 @@ export default function Setup() {
               Application Default Credentials or a private mounted
               service-account file on the backend.
             </p>
-            <pre>{`APP_MODE=live\nSTORAGE_BACKEND=firestore\nFIREBASE_PROJECT_ID=your-project\nGEMINI_API_KEY=your-private-key\nNEXT_PUBLIC_FIREBASE_API_KEY=your-web-config\nNEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com\nNEXT_PUBLIC_FIREBASE_APP_ID=your-web-app-id`}</pre>
+            <pre>{`APP_MODE=live\nSTORAGE_BACKEND=firestore\nLLM_REASON_CHAIN=groq,gemini\nLLM_FAST_CHAIN=groq\nGROQ_API_KEY=your-private-key\nGROQ_REASON_MODEL=qwen/qwen3.8-27b\nGROQ_FAST_MODEL=openai/gpt-oss-20b\nGOOGLE_CLOUD_PROJECT=your-project\nFIREBASE_PROJECT_ID=your-project\nGEMINI_API_KEY=your-google-research-key\nNEXT_PUBLIC_FIREBASE_API_KEY=your-web-config\nNEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com\nNEXT_PUBLIC_FIREBASE_APP_ID=your-web-app-id\nGOOGLE_SPEECH_ENABLED=true\nGOOGLE_CREDENTIALS_FILE=C:/private/google-credentials.json`}</pre>
             <p>
               Apply firestore.rules and use explicit ALLOWED_ORIGINS. Add your
               deployed frontend domain to Firebase authorized domains.
@@ -200,10 +201,12 @@ export default function Setup() {
       <section className="card" style={{ marginTop: 25 }}>
         <h2>Provider fallback chain</h2>
         <p>
-          Gemini is prioritized. Rate limits trigger cooldowns, invalid JSON
-          gets one repair, and failures fall through to the next configured
-          provider. Fast fallback is visibly degraded. Demo rules never pretend
-          to be a reasoning model.
+          Your configured chain determines the order. Groq powers the panel;
+          Gemini can supply Google Search research and optional dialogue
+          fallback. Rate limits trigger cooldowns, invalid JSON gets one repair,
+          and failures fall through to the next configured provider. Fast
+          fallback is visibly degraded. Demo rules never pretend to be a
+          reasoning model.
         </p>
         <div className="table-scroll">
           <table>

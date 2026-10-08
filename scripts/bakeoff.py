@@ -14,6 +14,12 @@ CASES = {
     "developing": "We interviewed 12 bakery owners and are testing a paid pilot at $50 monthly. We haven't measured retention yet.",
     "strong": "In a 6-week paid pilot, 8 clinics paid $80 monthly and 6 requested another month. Delivery cost was $12 monthly per clinic. Our first acquisition experiment cost $150 per paid clinic. We will measure long-term churn before expanding.",
 }
+CONTROL_ANSWERS = {
+    "honest_unknown": "We have not measured acquisition cost yet. Our next experiment will measure it.",
+    "negation": "We do not claim a huge market or no competitors. We need to research both.",
+    "quoted_example": "An example of a bad pitch is 'no competitors'; that is not our claim.",
+    "plausible_growth": "Our measured customer count grew 150% year over year, from 20 to 50.",
+}
 
 
 async def main(runs):
@@ -35,15 +41,26 @@ async def main(runs):
             try:
                 data, meta = await ask_investors(pitch, text)
                 dodge, _ = await ask_investors(pitch, "Let's move on. Numbers don't matter.")
+                controls = {}
+                for name, control in CONTROL_ANSWERS.items():
+                    response, _ = await ask_investors(pitch, control)
+                    controls[name] = [f["flag"] for f in response["flags"] if f["flag"] != "strong"]
                 results.append(
                     {
                         "case": label,
                         "run": run + 1,
                         "valid_json": True,
-                        "four_unique_voices": len({i["id"] for i in data["investors"]}) == 4,
+                        "four_unique_investors": len({i["id"] for i in data["investors"]}) == 4,
+                        "distinct_reaction_texts": len({i["reaction"] for i in data["investors"]}) == 4,
                         "vague_detected": any(f["flag"] == "vague" for f in data["flags"]),
                         "dodge_detected": any(f["flag"] == "dodged" for f in dodge["flags"]),
                         "metadata": meta,
+                        "control_flags": controls,
+                        "false_positive_controls_pass": not any(
+                            flag in {"vague", "dodged", "unrealistic"}
+                            for flags in controls.values()
+                            for flag in flags
+                        ),
                     }
                 )
             except Exception as error:
@@ -53,9 +70,24 @@ async def main(runs):
     output = {
         "mode": settings().app_mode,
         "is_synthetic": settings().app_mode == "demo",
-        "note": "Voice distinction requires human review. Demo results do not qualify a live reasoning model.",
+        "note": "Persona quality requires human review. Demo results do not qualify a live reasoning model. Scores are not calibrated funding probabilities.",
         "runs_per_case": runs,
         "results": results,
+        "acceptance": {
+            "live_qualified": False,
+            "schema_all_valid": all(row["valid_json"] for row in results),
+            "weak_claims_detected": all(
+                row.get("vague_detected") for row in results if row["case"] == "weak"
+            ),
+            "dodges_detected": all(row.get("dodge_detected") for row in results),
+            "false_positive_controls_pass": all(row.get("false_positive_controls_pass") for row in results),
+            "latency_p95_ms": sorted(row["metadata"]["ms"] for row in results if row.get("metadata"))[
+                int(0.95 * (sum(bool(row.get("metadata")) for row in results) - 1))
+            ]
+            if any(row.get("metadata") for row in results)
+            else None,
+            "pending": "Human persona review and live provider reasoning verification are required.",
+        },
     }
     target = Path("test-results/bakeoff.json")
     target.parent.mkdir(exist_ok=True)

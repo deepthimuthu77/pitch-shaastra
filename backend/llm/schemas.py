@@ -28,6 +28,8 @@ class Reaction(StrictModel):
     interest: int = Field(ge=0, le=100)
     status: Literal["interested", "doubtful", "out"]
     challenges: InvestorId | None = None
+    challenge_message_id: str | None = Field(default=None, max_length=80)
+    challenged_quote: str | None = Field(default=None, max_length=350)
 
 
 class Question(StrictModel):
@@ -35,6 +37,8 @@ class Question(StrictModel):
     text: str = Field(min_length=5, max_length=600)
     targets_weakness: str = Field(max_length=150)
     category: Category
+    context_message_id: str | None = Field(default=None, max_length=80)
+    reason: str = Field(default="", max_length=400)
 
 
 class FlagEvidence(StrictModel):
@@ -87,6 +91,9 @@ class Weakness(StrictModel):
     title: str = Field(max_length=150)
     evidence: str = Field(min_length=1, max_length=600)
     action: str = Field(max_length=600)
+    category: str = Field(default="", max_length=50)
+    message_id: str | None = Field(default=None, max_length=80)
+    why_it_matters: str = Field(default="", max_length=500)
 
 
 class Verdict(StrictModel):

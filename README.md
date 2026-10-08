@@ -1,6 +1,12 @@
 # PitchGrill
 
-A founder's rehearsal room: four fictional investors test a pitch, then explain what to improve. A separate idea-analysis workspace makes market assumptions, financial projections, competitive hypotheses and risks inspectable.
+For the selected Vercel + Render deployment, follow [free hosting](docs/free-hosting.md).
+
+For Groq-powered investor dialogue with Firebase, Google Search and cloud voices,
+follow [the credential checklist](docs/groq-setup.md). The investor room includes
+opt-in ambient sound, visible investor convictions and spoken verdicts.
+
+A Shark Tank simulator: enter with an investment ask, defend your idea against four fictional investors, hear their verdicts, and accept, counter or walk away from simulated offers. Private coaching afterward helps you prepare for another encounter. A separate idea-analysis workspace makes market assumptions, financial projections, competitive hypotheses and risks inspectable.
 
 ## Run the demo
 
@@ -43,12 +49,13 @@ Production mode builds Next.js before starting. `--skip-install` is only for an 
 
 - Four investor personas, three difficulties, adaptive follow-ups, disagreements, bounded interest changes, answer idempotency, timer and saved drafts.
 - Typed answers, browser speech recognition and synthesis; optional Google Cloud transcription and distinct investor voices with explicit controls.
-- Six-dimension scorecards, quoted weaknesses, a rewrite with missing-evidence placeholders, five-question preparation sheet, retry comparison and PDF printing.
+- Investor-led questioning, opt-in mid-answer interjections, fictional offers, bounded counteroffers, withdrawal and walk-away outcomes. The negotiation room precedes the coaching report.
+- Evidence-anchored six-dimension scorecards, quoted weaknesses, auditable flag challenges, highlighted pitch rewrites, targeted practice, retry comparison and PDF printing. Claim checks run before the verdict; independently supported contradictions are distinguished from assumption-range comparisons.
 - Standalone analysis with seven measured stages and durable leased jobs. Live research uses approved generic terms, code-assigned citations and literal evidence quotes.
-- Fourteen editable low/base/high assumptions. Top-down market size remains unavailable without evidence; bottom-up estimates clearly expose their planning inputs.
-- Revenue scenarios, unit economics, 1,000 seeded triangular simulations, percentile fan charts, sensitivity, weighted wedges, moats, risks, regulatory pointers and funding deficits.
+- Twenty-one editable low/base/high assumptions. Subscription, marketplace, one-time sales, hardware and service models expose their different equations. Starting cash enables runway; unknown cash keeps runway unavailable.
+- Revenue scenarios, unit economics, 1,000 seeded triangular simulations, percentile fan charts, sensitivity, sourced market growth/structure, evidence-backed competitor matrices, wedge beachhead estimates and ranking stability checks.
 - Zero-model-call scenario previews, immutable saved versions, comparison, claim checks, selective expiring/revocable shares, JSON/CSV and all-section PDF printing.
-- Private history, personal progress and opt-in cohort aggregates suppressed until there are five real participants and ten real sessions. Synthetic examples never contribute to real benchmarks.
+- Private history, investor trajectories, retry chains, transparent practice readiness and opt-in cohort comparisons suppressed until there are five real participants and ten real sessions. Synthetic examples never contribute to real benchmarks.
 - Export/delete controls, tenant isolation, Firebase token validation, streaming body limits, quotas, finite numeric validation, nonce CSP, restricted CORS and non-root read-only containers.
 
 ## Enable Google services

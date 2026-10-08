@@ -12,10 +12,19 @@ export default function NewAnalysis() {
   async function submit(body: IntakeBody) {
     setBusy(true);
     setError("");
-    const { difficulty, parent_pitch_id, analytics_consent, ...input } = body;
+    const {
+      difficulty,
+      parent_pitch_id,
+      analytics_consent,
+      funding_ask,
+      equity_offered,
+      ...input
+    } = body;
     void difficulty;
     void parent_pitch_id;
     void analytics_consent;
+    void funding_ask;
+    void equity_offered;
     try {
       const data = await post<{ analysis_id: string }>("/api/analysis", input);
       router.push(`/analysis/${data.analysis_id}`);

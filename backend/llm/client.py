@@ -1,14 +1,16 @@
 import asyncio
 import json
+import logging
 import time
 
 import httpx
 
 from backend.config import settings
 from backend.llm.parse import extract_json, split_think
-from backend.llm.providers import chain, provider, reasoning_params
+from backend.llm.providers import chain, output_format, provider, reasoning_params
 
 cooldowns = {}
+logger = logging.getLogger("pitchgrill.llm")
 
 
 class LLMUnavailable(Exception):
@@ -16,7 +18,15 @@ class LLMUnavailable(Exception):
 
 
 async def call_llm(
-    *, system, messages, schema, effort="medium", tier="reason", allow_degrade=True, only_provider=None
+    *,
+    system,
+    messages,
+    schema,
+    effort="medium",
+    tier="reason",
+    allow_degrade=True,
+    only_provider=None,
+    max_tokens=6000,
 ):
     if settings().app_mode == "demo":
         raise LLMUnavailable("Demo mode never calls external model providers")
@@ -29,25 +39,32 @@ async def call_llm(
             for current_tier in tiers:
                 for name in [only_provider] if only_provider else chain(current_tier):
                     config = provider(name, current_tier)
-                    if not config["key"] or not config["model"] or cooldowns.get(name, 0) > time.monotonic():
+                    cooldown_key = (name, config["model"]) if name == "groq" else name
+                    if (
+                        not config["key"]
+                        or not config["model"]
+                        or cooldowns.get(cooldown_key, 0) > time.monotonic()
+                    ):
                         continue
+                    format = output_format(name, config["model"], schema)
+                    schema_instruction = "\nReturn only JSON matching the supplied schema. No additional fields. Keep the public assessment concise."
+                    if format["type"] == "json_object":
+                        schema_instruction += "\n" + json.dumps(schema.model_json_schema())
                     body = {
                         "model": config["model"],
                         "messages": [
                             {
                                 "role": "system",
-                                "content": system
-                                + "\nReturn JSON matching this schema:\n"
-                                + json.dumps(schema.model_json_schema()),
+                                "content": system + schema_instruction,
                             },
                             *messages,
                         ],
-                        "max_tokens": 6000,
-                        "response_format": {"type": "json_object"},
-                        **reasoning_params(name, effort),
+                        "max_tokens": max_tokens,
+                        "response_format": format,
+                        **reasoning_params(name, effort, config["model"]),
                     }
                     headers = {"Authorization": "Bearer " + config["key"], "X-Title": "PitchGrill"}
-                    stripped, repaired = False, False
+                    stripped, repaired, rate_retried = False, False, False
                     for _ in range(3):
                         try:
                             response = await client.post(config["url"], headers=headers, json=body)
@@ -56,11 +73,24 @@ async def call_llm(
                                     wait = min(300, max(15, float(response.headers.get("retry-after", "30"))))
                                 except ValueError:
                                     wait = 30
-                                cooldowns[name] = time.monotonic() + wait
+                                cooldowns[cooldown_key] = time.monotonic() + wait
+                                if (
+                                    not rate_retried
+                                    and wait + time.perf_counter() - started + 5
+                                    < settings().llm_total_timeout
+                                ):
+                                    rate_retried = True
+                                    await asyncio.sleep(wait)
+                                    continue
                             if response.status_code == 400 and not stripped:
                                 body.pop("reasoning_effort", None)
                                 body.pop("reasoning", None)
+                                body.pop("reasoning_format", None)
                                 body.pop("response_format", None)
+                                if format["type"] == "json_schema":
+                                    body["messages"][0]["content"] += (
+                                        "\nRequired JSON schema:\n" + json.dumps(schema.model_json_schema())
+                                    )
                                 stripped = True
                                 continue
                             response.raise_for_status()
@@ -69,7 +99,7 @@ async def call_llm(
                             text = split_think(message.get("content"))
                             try:
                                 result = schema.model_validate(extract_json(text))
-                            except ValueError:
+                            except ValueError as error:
                                 if repaired:
                                     raise
                                 body["messages"] = [
@@ -77,7 +107,14 @@ async def call_llm(
                                     {"role": "assistant", "content": text[:20_000]},
                                     {
                                         "role": "user",
-                                        "content": "Output failed schema validation. Return a complete corrected JSON object only, with every required field and no extra fields.",
+                                        "content": "Output failed schema validation. Return complete corrected JSON with every required field and no extra fields. Invalid fields: "
+                                        + json.dumps(
+                                            [{"loc": e["loc"], "type": e["type"]} for e in error.errors()][
+                                                :12
+                                            ]
+                                            if hasattr(error, "errors")
+                                            else [{"type": "invalid_json"}]
+                                        ),
                                     },
                                 ]
                                 repaired = True
@@ -105,7 +142,17 @@ async def call_llm(
                                     else None,
                                 },
                             }
-                        except (httpx.HTTPError, ValueError, KeyError, IndexError):
+                        except (httpx.HTTPError, ValueError, KeyError, IndexError) as error:
+                            logger.warning(
+                                "model_unavailable provider=%s model=%s status=%s error_type=%s request_chars=%s",
+                                name,
+                                config["model"],
+                                error.response.status_code
+                                if isinstance(error, httpx.HTTPStatusError)
+                                else None,
+                                type(error).__name__,
+                                len(json.dumps(body)),
+                            )
                             failures.append(name)
                             break
             raise LLMUnavailable(

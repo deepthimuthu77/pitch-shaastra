@@ -27,6 +27,17 @@ FRACTIONS = {
     "max_penetration",
     "monthly_churn",
     "gross_margin",
+    "take_rate",
+    "repeat_purchase_monthly",
+}
+OPTIONAL_KEYS = {
+    "initial_cash",
+    "units_per_customer_month",
+    "take_rate",
+    "unit_price",
+    "unit_variable_cost",
+    "capacity_units_month",
+    "repeat_purchase_monthly",
 }
 
 
@@ -53,9 +64,9 @@ class Assumption(StrictModel):
 
     @model_validator(mode="after")
     def domain(self):
-        if self.key not in REQUIRED_KEYS:
+        if self.key not in set(REQUIRED_KEYS) | OPTIONAL_KEYS:
             raise ValueError("Unknown assumption")
-        if self.key != "tam_top_down" and self.value is None:
+        if self.key not in {"tam_top_down", "initial_cash"} and self.value is None:
             raise ValueError("Required computational assumption")
         if self.value:
             cap = (
@@ -74,11 +85,12 @@ class Assumption(StrictModel):
 
 class AssumptionSet(StrictModel):
     analysis: str = Field(min_length=20, max_length=2000)
-    assumptions: list[Assumption] = Field(min_length=14, max_length=14)
+    assumptions: list[Assumption] = Field(min_length=14, max_length=21)
 
     @model_validator(mode="after")
     def complete(self):
-        if {a.key for a in self.assumptions} != set(REQUIRED_KEYS):
+        keys = [a.key for a in self.assumptions]
+        if not set(REQUIRED_KEYS) <= set(keys) or len(keys) != len(set(keys)):
             raise ValueError("Each required assumption must appear exactly once")
         return self
 
@@ -141,6 +153,20 @@ class CompetitorSet(StrictModel):
     incumbent_response: str = Field(max_length=500)
 
 
+class FeatureCell(StrictModel):
+    competitor: str = Field(max_length=100)
+    feature: str = Field(max_length=100)
+    value: str = Field(max_length=250)
+    fact_id: str = Field(max_length=30)
+    evidence_quote: str = Field(min_length=1, max_length=300)
+
+
+class FeatureEvidence(StrictModel):
+    analysis: str = Field(min_length=20, max_length=1000)
+    features: list[str] = Field(min_length=1, max_length=8)
+    cells: list[FeatureCell] = Field(default_factory=list, max_length=60)
+
+
 class WedgeScores(StrictModel):
     pain_intensity: int = Field(ge=1, le=5)
     reachability: int = Field(ge=1, le=5)
@@ -158,6 +184,26 @@ class Wedge(StrictModel):
     why_it_works: str = Field(max_length=500)
     what_must_be_true: list[str] = Field(min_length=1, max_length=5)
     expansion_path: str = Field(max_length=500)
+    segment_share: Range | None = None
+    segment_share_rationale: str = Field(
+        default="Segment share is an unvalidated planning hypothesis.", max_length=500
+    )
+
+    @model_validator(mode="after")
+    def fraction(self):
+        if self.segment_share and self.segment_share.high > 1:
+            raise ValueError("Wedge segment share must be within [0,1]")
+        return self
+
+
+class WedgeAssessment(StrictModel):
+    name: str = Field(max_length=120)
+    scores: WedgeScores
+
+
+class WedgeEvaluation(StrictModel):
+    analysis: str = Field(min_length=20, max_length=1000)
+    evaluations: list[WedgeAssessment] = Field(min_length=3, max_length=6)
 
 
 class Moat(StrictModel):

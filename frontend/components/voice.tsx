@@ -260,9 +260,11 @@ export function VoiceInput({
 export function Speak({
   text,
   investor,
+  onState,
 }: {
   text: string;
   investor: InvestorId;
+  onState?: (speaking: boolean) => void;
 }) {
   const [speaking, setSpeaking] = useState(false),
     [supported, setSupported] = useState(false),
@@ -277,10 +279,13 @@ export function Speak({
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = "";
     setSpeaking(false);
+    onState?.(false);
   }
   useEffect(() => {
     setSupported("speechSynthesis" in window);
+    window.addEventListener("pitchgrill-barge-in", stop);
     return () => {
+      window.removeEventListener("pitchgrill-barge-in", stop);
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
       audio.current?.pause();
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
@@ -304,6 +309,7 @@ export function Speak({
         audio.current = new Audio(objectUrl.current);
         audio.current.onended = stop;
         await audio.current.play();
+        onState?.(true);
       } catch (e) {
         setError((e as Error).message);
         stop();
@@ -318,9 +324,12 @@ export function Speak({
     if (voices.length) utterance.voice = voices[index % voices.length];
     utterance.pitch = [0.8, 0.95, 1.1, 1][index];
     utterance.rate = [1.08, 1, 0.95, 0.9][index];
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    setSpeaking(true);
+    utterance.onend = stop;
+    utterance.onerror = stop;
+    utterance.onstart = () => {
+      setSpeaking(true);
+      onState?.(true);
+    };
     window.speechSynthesis.speak(utterance);
   }
   return (

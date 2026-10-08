@@ -16,6 +16,10 @@ export type IntakeBody = {
   target_customer: string;
   industry: string;
   price_guess: number | null;
+  business_model: string;
+  initial_cash: number | null;
+  funding_ask?: number;
+  equity_offered?: number;
   horizon_months: number;
   research_terms: string;
   research_consent: boolean;
@@ -71,6 +75,10 @@ export function Intake({
     target_customer: "",
     industry: "software",
     price_guess: null,
+    business_model: "subscription",
+    initial_cash: null,
+    funding_ask: 100000,
+    equity_offered: 10,
     horizon_months: 60,
     research_terms: "",
     research_consent: false,
@@ -212,6 +220,35 @@ export function Intake({
         </fieldset>
       )}
       <div className="form-grid">
+        {kind === "pitch" && (
+          <>
+            <label>
+              Your investment ask ({form.currency})
+              <input
+                type="number"
+                min="1"
+                max="1000000000000"
+                required
+                value={form.funding_ask ?? 100000}
+                onChange={(e) => change("funding_ask", Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Equity offered (%)
+              <input
+                type="number"
+                min="0.1"
+                max="49"
+                step="0.1"
+                required
+                value={form.equity_offered ?? 10}
+                onChange={(e) =>
+                  change("equity_offered", Number(e.target.value))
+                }
+              />
+            </label>
+          </>
+        )}
         <label>
           Geography
           <input
@@ -258,6 +295,46 @@ export function Intake({
         <div className="advanced-form">
           <div className="form-grid">
             <label>
+              Revenue model
+              <select
+                value={form.business_model}
+                onChange={(e) => change("business_model", e.target.value)}
+              >
+                <option value="subscription">
+                  Subscription · recurring monthly
+                </option>
+                <option value="marketplace">
+                  Marketplace · commission on transactions
+                </option>
+                <option value="one_time">One-time purchases</option>
+                <option value="hardware">
+                  Hardware · units and production cost
+                </option>
+                <option value="services">
+                  Services · capacity and utilization
+                </option>
+              </select>
+            </label>
+            <label>
+              Starting cash ({form.currency})
+              <input
+                type="number"
+                min="0"
+                max="1000000000000"
+                value={form.initial_cash ?? ""}
+                onChange={(e) =>
+                  change(
+                    "initial_cash",
+                    e.target.value === "" ? null : Number(e.target.value),
+                  )
+                }
+              />
+              <span className="field-note">
+                Leave blank if unknown. Runway is unavailable without a starting
+                balance.
+              </span>
+            </label>
+            <label>
               Who pays?
               <input
                 value={form.target_customer}
@@ -267,7 +344,11 @@ export function Intake({
               />
             </label>
             <label>
-              Monthly price hypothesis
+              {form.business_model === "subscription"
+                ? "Monthly price hypothesis"
+                : form.business_model === "marketplace"
+                  ? "Transaction value hypothesis"
+                  : "Price per unit / engagement hypothesis"}
               <input
                 type="number"
                 min="0"

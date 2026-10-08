@@ -24,3 +24,5 @@ playwright-report/
 .auth/
 .env
 deploy/api-env.yaml
+.vercel/
+keys/

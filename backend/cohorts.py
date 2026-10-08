@@ -47,6 +47,64 @@ async def membership(id, user):
     return org
 
 
+async def cohort_metrics(org, uid):
+    groups = {}
+    for member in org["members"]:
+        if member["share_metrics"]:
+            rows = [
+                p
+                for p in await store().list(member["uid"], "pitches")
+                if not p.get("is_synthetic", True) and p.get("report")
+            ]
+            if rows:
+                groups[member["uid"]] = rows
+    count = sum(len(rows) for rows in groups.values())
+    if len(groups) < 5 or count < 10:
+        return {
+            "available": False,
+            "reason": "Requires 5 consenting real participants and 10 real sessions.",
+            "method": "One latest completed session per participant; synthetic sessions excluded.",
+        }
+    latest = [max(rows, key=lambda p: p["created_at"]) for rows in groups.values()]
+    scores = [p["report"]["overall_score"] for p in latest]
+    dimensions = {
+        key: round(sum(p["report"]["scorecard"][key] for p in latest) / len(latest))
+        for key in latest[0]["report"]["scorecard"]
+    }
+    ordered = sorted(scores)
+    result = {
+        "available": True,
+        "participants": len(groups),
+        "real_sessions": count,
+        "average_score": round(sum(scores) / len(scores)),
+        "dimensions": dimensions,
+        "score_distribution": {
+            "p25": ordered[int(0.25 * (len(ordered) - 1))],
+            "p50": ordered[int(0.5 * (len(ordered) - 1))],
+            "p75": ordered[int(0.75 * (len(ordered) - 1))],
+        },
+        "method": "One latest completed session per participant. Coaching scores, not investment outcomes.",
+    }
+    if uid in groups:
+        personal = max(groups[uid], key=lambda p: p["created_at"])["report"]
+        result["your_comparison"] = {
+            "score_delta": personal["overall_score"] - result["average_score"],
+            "dimension_deltas": {
+                key: personal["scorecard"][key] - value for key, value in dimensions.items()
+            },
+        }
+    return result
+
+
+async def personal_benchmarks(uid):
+    results = []
+    for row in await store().list(uid, "memberships"):
+        org = await store().get("system", "orgs", row["id"])
+        if org and any(m["uid"] == uid for m in org["members"]):
+            results.append({"id": org["id"], "name": org["name"], **await cohort_metrics(org, uid)})
+    return results
+
+
 @router.post("")
 async def create(body: CreateOrg, user=Depends(protected_user)):
     if len(await store().list(user["uid"], "memberships")) >= 10:
@@ -160,6 +218,7 @@ async def overview(id: str, user=Depends(protected_user)):
                 for key in records[0]["report"]["scorecard"]
             },
         )
+        result["comparison"] = await cohort_metrics(org, user["uid"])
     return result
 
 

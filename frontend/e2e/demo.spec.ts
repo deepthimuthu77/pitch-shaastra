@@ -8,7 +8,7 @@ test("Docker demo: pitch, report, scenario version, selective share and dashboar
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /Good ideas deserve/ }),
+    page.getByRole("heading", { name: /Conviction.*Meet reality/ }),
   ).toBeVisible();
   await page.screenshot({
     path: "test-results/home-desktop.png",
@@ -22,6 +22,19 @@ test("Docker demo: pitch, report, scenario version, selective share and dashboar
   await expect(
     page.getByRole("textbox", { name: "Your answer", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".tank-stakes")).toContainText("has the floor");
+  const roomSound = page.getByRole("button", {
+    name: "Enable room sound",
+    exact: true,
+  });
+  await expect(roomSound).toHaveAttribute("aria-pressed", "false");
+  await roomSound.click();
+  await expect(
+    page.getByRole("button", { name: "Mute room sound", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", { name: "Mute room sound", exact: true })
+    .click();
   for (const answer of [
     "Our 8 pilot clinics paid $80 monthly and 6 asked to renew. We interviewed the operations managers and measured 120 recovered appointments over 6 weeks.",
     "We measured delivery cost at $12 per clinic and paid acquisition cost at $150. We have not measured long-term churn and will validate it in a retention pilot.",
@@ -39,7 +52,34 @@ test("Docker demo: pitch, report, scenario version, selective share and dashboar
     path: "test-results/pitch-room.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Finish & get feedback" }).click();
+  await page.getByRole("button", { name: "Hear the panel verdict" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Who is in? Who is out?" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Counteroffer", exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Submit counteroffer", exact: true })
+    .click();
+  await expect(page.locator(".deal-reaction")).toContainText(
+    "Rules-based dialogue",
+  );
+  await page
+    .getByRole("button", { name: "Accept simulated offer", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "You have a simulated deal." }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "test-results/negotiation-room.png",
+    fullPage: true,
+  });
+  await page.getByText("Negotiation history", { exact: true }).click();
+  await expect(page.getByText(/accept.*existing terms/)).toBeVisible();
+  await page.getByRole("link", { name: "Open coaching report" }).click();
   await expect(
     page.getByRole("heading", { name: "Your scorecard" }),
   ).toBeVisible();
@@ -63,7 +103,7 @@ test("Docker demo: pitch, report, scenario version, selective share and dashboar
   });
   await page.getByRole("button", { name: "What if?", exact: true }).click();
   const sliders = page.getByRole("slider");
-  await expect(sliders).toHaveCount(14);
+  expect(await sliders.count()).toBeGreaterThanOrEqual(14);
   const slider = sliders.nth(9);
   await slider.focus();
   await slider.press("ArrowRight");

@@ -11,6 +11,7 @@ test-results
 .ruff_cache
 **/node_modules
 **/.next
+**/.vercel
 **/__pycache__
 **/*.tsbuildinfo
 **/test-results

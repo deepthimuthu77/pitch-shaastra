@@ -1,0 +1,38 @@
+{
+  "name": "pitchgrill",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:e2e": "playwright test",
+    "lint": "prettier --check app components lib e2e proxy.ts playwright.config.ts next.config.mjs tsconfig.json package.json",
+    "format": "prettier --write app components lib e2e proxy.ts playwright.config.ts next.config.mjs tsconfig.json package.json"
+  },
+  "dependencies": {
+    "firebase": "12.19.0",
+    "framer-motion": "^12.0.0",
+    "lucide-react": "^0.577.0",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "^3.0.0",
+    "swr": "^2.3.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prettier": "3.6.2",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

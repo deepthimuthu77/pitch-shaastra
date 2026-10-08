@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "features": {
+    "commit-ownership": {
+      "author": 1,
+      "weight": 1,
+      "scopes": [
+        "AGENTS.md",
+        "docs/commit-ownership.md",
+        "prompts/commit-owner.md",
+        "review-ownership.json"
+      ],
+      "related_to": null
+    }
+  }
+}

@@ -30,6 +30,7 @@ async def search(query, max_results=5):
     if settings().app_mode == "demo":
         return {"items": [], "provider": "demo", "search_suggestions": "", "ms": 0}
     started = time.perf_counter()
+    failures = []
     async with httpx.AsyncClient(timeout=25, follow_redirects=False) as client:
         for name in os.getenv("SEARCH_CHAIN", "google,tavily,serper").split(","):
             name = name.strip()
@@ -121,13 +122,23 @@ async def search(query, max_results=5):
                         "search_suggestions": suggestions,
                         "ms": round((time.perf_counter() - started) * 1000),
                     }
-            except (httpx.HTTPError, ValueError, KeyError, IndexError):
+            except (httpx.HTTPError, ValueError, KeyError, IndexError) as error:
+                failures.append(
+                    {
+                        "provider": name,
+                        "error_type": type(error).__name__,
+                        "http_status": error.response.status_code
+                        if isinstance(error, httpx.HTTPStatusError)
+                        else None,
+                    }
+                )
                 continue
     return {
         "items": [],
         "provider": "unavailable",
         "search_suggestions": "",
         "ms": round((time.perf_counter() - started) * 1000),
+        "failures": failures,
     }
 
 

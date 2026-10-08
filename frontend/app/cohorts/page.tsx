@@ -2,6 +2,10 @@
 import { useEffect, useState } from "react";
 import { api, post } from "@/lib/api";
 import { Badge, ErrorBox, Metric } from "@/components/ui";
+import {
+  CohortComparisonView,
+  type CohortComparison,
+} from "@/components/cohort-comparison";
 type Cohort = {
   id: string;
   name: string;
@@ -13,6 +17,7 @@ type Cohort = {
   real_sessions?: number;
   average_score?: number;
   dimensions?: Record<string, number>;
+  comparison?: CohortComparison;
 };
 export default function Cohorts() {
   const [rows, setRows] = useState<
@@ -213,6 +218,9 @@ export default function Cohorts() {
                 <Metric key={key} label={key.toUpperCase()} value={value} />
               ))}
             </div>
+          )}
+          {cohort.comparison && (
+            <CohortComparisonView value={cohort.comparison} />
           )}
           <button
             className="button danger"

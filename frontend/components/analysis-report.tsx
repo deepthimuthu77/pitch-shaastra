@@ -22,6 +22,12 @@ import type {
 } from "@/lib/types";
 import { Badge, Empty, ErrorBox, Loading, Metric, money } from "./ui";
 import { RevenueChart, Tornado } from "./charts";
+import {
+  MarketDepth,
+  FeatureMatrix,
+  WedgeStability,
+  Beachhead,
+} from "./market-depth";
 
 const tabs = [
   "Summary",
@@ -201,6 +207,7 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
           scenarios: preview.scenarios,
           simulation: preview.simulation,
           flags: preview.flags,
+          metadata: preview.metadata,
         },
         unit_economics: preview.unit_economics,
         sensitivity: preview.sensitivity,
@@ -210,6 +217,9 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
           ...data.sections.funding!,
           need: preview.simulation.funding_need,
           breakeven_month: preview.scenarios.base.breakeven_month,
+          initial_cash: preview.scenarios.base.initial_cash,
+          runway_months: preview.scenarios.base.runway_months,
+          runway_status: preview.scenarios.base.runway_status,
         },
       }
     : data.sections;
@@ -509,7 +519,10 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
                 note="Accounts × monthly price × 12"
               />
               <Metric
-                label="BASE END-HORIZON ARR"
+                label={
+                  base?.metadata?.annualized_revenue_label ||
+                  "BASE END-HORIZON ARR"
+                }
                 value={fmt(base?.arr_end)}
                 note="Annualized final-month revenue"
               />
@@ -663,6 +676,7 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
                 </div>
               ))}
             </div>
+            <MarketDepth sections={sections} />
             <section className="card">
               <h3>How these ranges are produced</h3>
               <p>
@@ -690,7 +704,7 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
           <>
             <div className="metrics-grid">
               <Metric
-                label="P10 / P50 / P90 ARR"
+                label={`P10 / P50 / P90 ${base?.metadata?.annualized_revenue_label || "ARR"}`}
                 value={fmt(sections.revenue.simulation.arr_end.p50)}
                 note={`${fmt(sections.revenue.simulation.arr_end.p10)} – ${fmt(sections.revenue.simulation.arr_end.p90)}`}
               />
@@ -774,7 +788,7 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
                       <th>Customers</th>
                       <th>Revenue</th>
                       <th>Net cash</th>
-                      <th>Cumulative cash</th>
+                      <th>Cash balance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -797,19 +811,28 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
           <>
             <div className="metrics-grid">
               <Metric
-                label="MONTHLY ARPU"
+                label={
+                  base?.metadata?.business_model === "one_time" ||
+                  base?.metadata?.business_model === "hardware"
+                    ? "REVENUE PER PURCHASE"
+                    : "MONTHLY ARPU"
+                }
                 value={fmt(unit.arpu)}
                 note="Revenue per active customer"
               />
               <Metric
                 label="GROSS MARGIN"
-                value={`${Math.round(unit.gross_margin * 100)}%`}
+                value={
+                  unit.gross_margin == null
+                    ? "Unavailable"
+                    : `${Math.round(unit.gross_margin * 100)}%`
+                }
                 note="Before acquisition and fixed costs"
               />
               <Metric
                 label="LIFETIME VALUE"
                 value={fmt(unit.ltv)}
-                note={`Gross-profit lifetime · capped at ${unit.lifetime_months.toFixed(1)} months`}
+                note={`${unit.lifetime_label || "Capped customer lifetime"}: ${unit.lifetime_months.toFixed(1)}`}
               />
               <Metric
                 label="LTV / CAC"
@@ -827,7 +850,7 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
                       <th>CAC</th>
                       <th>LTV</th>
                       <th>LTV / CAC</th>
-                      <th>Payback months</th>
+                      <th>{unit.payback_label || "Payback months"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -846,8 +869,9 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
                 </table>
               </div>
               <p>
-                LTV = monthly ARPU × gross margin × min(1/churn, horizon).
-                Payback = CAC / monthly gross profit. These exclude taxes,
+                LTV uses contribution per customer and a capped lifetime or
+                expected purchase count for the selected model. Payback uses
+                contribution per month or per purchase. These exclude taxes,
                 discounting and working capital.
               </p>
             </section>
@@ -964,6 +988,9 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
             </section>
           </>
         )}
+        {(printAll || tab === "Competitors") && (
+          <FeatureMatrix value={sections.competitors?.feature_matrix} />
+        )}
         {(printAll || tab === "Wedges") && sections.wedges && (
           <>
             <section className="card">
@@ -973,8 +1000,11 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
               <h2>{sections.wedges.recommended}</h2>
               <p>
                 Weighted judgments, not proven advantages.{" "}
-                {sections.wedges.stability}
+                {typeof sections.wedges.stability === "string"
+                  ? sections.wedges.stability
+                  : "See evaluation detail below."}
               </p>
+              <WedgeStability value={sections.wedges.stability} />
               <div className="wedge-weights">
                 {Object.entries(sections.wedges.weights).map(([key, value]) => (
                   <label key={key}>
@@ -1012,6 +1042,11 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
                     </div>
                     <Badge>{w.kind}</Badge>
                     <p>{w.description}</p>
+                    <Beachhead
+                      value={w.beachhead}
+                      currency={data.inputs.currency}
+                      locale={data.inputs.locale}
+                    />
                     <div className="wedge-score-bars">
                       {Object.entries(w.scores).map(([key, value]) => (
                         <div key={key}>
@@ -1189,6 +1224,23 @@ export function AnalysisReport({ id, token }: { id?: string; token?: string }) {
             <section className="card">
               <h2>What the model funds.</h2>
               <p>{sections.funding.runway_note}</p>
+              <div className="metrics-grid">
+                <Metric
+                  label="STARTING CASH"
+                  value={fmt(sections.funding.initial_cash)}
+                />
+                <Metric
+                  label="RUNWAY"
+                  value={
+                    sections.funding.runway_status === "unknown"
+                      ? "Unknown"
+                      : sections.funding.runway_months != null
+                        ? `${sections.funding.runway_months} months`
+                        : "Within horizon"
+                  }
+                  note="Runway uses the modeled cash balance, not operating break-even."
+                />
+              </div>
               <p>
                 The model covers customer acquisition, delivery gross margin and
                 fixed operating costs. Taxes, working capital, financing costs

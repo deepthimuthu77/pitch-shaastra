@@ -38,6 +38,7 @@ async def main():
                     }
                 ],
                 schema=AskResult,
+                max_tokens=2600,
                 only_provider=name,
                 allow_degrade=False,
             )

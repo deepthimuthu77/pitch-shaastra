@@ -54,7 +54,7 @@ def test_full_pitch_analysis_share_version_and_deletion():
         asyncio.run(run_analysis(uid, analysis_id))
         analysis = client.get(f"/api/analysis/{analysis_id}", headers=headers).json()
         assert analysis["status"] == "partial"
-        assert len(analysis["sections"]["assumptions"]) == 14
+        assert len(analysis["sections"]["assumptions"]) == 21
         assert analysis["sections"]["market"]["base"]["tam"] is None
         assert analysis["sections"]["sources"]["items"] == []
         recompute = client.post(

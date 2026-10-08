@@ -6,6 +6,7 @@ export type PanelMember = {
   lens: string;
   color: string;
   style: string;
+  conviction?: string;
 };
 export type Meta = {
   provider: string;
@@ -23,6 +24,8 @@ export type Flag = {
   quote: string;
   reason: string;
   confidence: number;
+  review?: { decision: string; reason: string };
+  dismissed?: boolean;
 };
 export type Message = {
   id: string;
@@ -31,6 +34,8 @@ export type Message = {
   flags?: Flag[];
   question?: string;
   challenges?: InvestorId;
+  challenge_message_id?: string;
+  challenged_quote?: string;
   timestamp: number;
   metrics?: {
     question_category: string;
@@ -44,6 +49,16 @@ export type Scorecard = Record<
   number
 >;
 export type Pitch = {
+  inputs?: { currency?: string };
+  funding_ask?: number;
+  equity_offered?: number;
+  negotiation_reaction?: {
+    investor_id: InvestorId;
+    text: string;
+    position: string;
+    meta: { provider: string; is_demo: boolean };
+  };
+  interest_history?: Trajectory[];
   id: string;
   title: string;
   idea: string;
@@ -51,6 +66,19 @@ export type Pitch = {
   status: string;
   round: string;
   investor_state: Record<InvestorId, number>;
+  deal_history?: {
+    investor_id: InvestorId;
+    action: string;
+    amount: number | null;
+    equity_percent: number | null;
+    timestamp: number;
+  }[];
+  deal_outcome?: {
+    status: string;
+    investor_id: InvestorId;
+    amount: number;
+    equity_percent: number;
+  };
   answer_count: number;
   messages: Message[];
   next_question: {
@@ -65,6 +93,18 @@ export type Pitch = {
   is_synthetic: boolean;
   attempt_number: number;
   parent_pitch_id?: string;
+  deep_dive_focus?: string;
+  weakness_tracker?: Record<
+    string,
+    {
+      attempts: number;
+      score: number;
+      resolved: boolean;
+      latest_message_id: string;
+      gap: string;
+    }
+  >;
+  interest_trajectory?: Trajectory[];
   report?: {
     overall_score: number;
     scorecard: Scorecard;
@@ -73,9 +113,58 @@ export type Pitch = {
     rewritten_pitch: string;
     prep_sheet: { question: string; suggested_answer: string }[];
     dodged: { question: string; answer: string; message_id: string }[];
+    readiness?: {
+      score: number;
+      band: string;
+      coverage_percent: number;
+      method: string;
+      limitations: string[] | string;
+    };
+    rubric?: {
+      version: string;
+      anchors: Record<string, unknown>;
+      dimensions: Record<string, unknown>;
+    };
+    improvement_plan?: {
+      category: string;
+      title: string;
+      evidence: string;
+      message_id: string;
+      why_it_matters: string;
+      action: string;
+      success_criterion: string;
+    }[];
+    targeted_practice?: {
+      category: string;
+      question: string;
+      success_criterion: string;
+    }[];
+    rewrite_changes?: {
+      before: string;
+      after: string;
+      reason: string;
+      category: string;
+    }[];
+    interest_trajectory?: Trajectory[];
+    simulated_offers?: {
+      investor_id: InvestorId;
+      amount: number;
+      equity_percent: number;
+      valuation: number;
+      conditions: string[];
+      status: string;
+      currency: string;
+      rationale: string;
+    }[];
   };
   comparison?: { before: Scorecard; after: Scorecard; deltas: Scorecard };
   report_note?: string;
+};
+export type Trajectory = {
+  answer_index: number;
+  message_id: string;
+  interest: Record<InvestorId, number>;
+  timestamp: number;
 };
 export type Config = {
   mode: "demo" | "live";
@@ -114,13 +203,26 @@ export type Revenue = {
     customers: number;
     revenue: number;
     net: number;
-    cash: number;
+    cash: number | null;
+    cumulative_net?: number;
+    units?: number;
+    gmv?: number;
+    gross_profit?: number;
   }[];
   annual_revenue: number[];
   arr_end: number;
   customers_end: number;
   funding_need: number;
   breakeven_month: number | null;
+  initial_cash?: number | null;
+  runway_months?: number | null;
+  runway_status?: string;
+  metadata?: {
+    business_model: string;
+    annualized_revenue_label: string;
+    customer_label: string;
+    method: string;
+  };
 };
 export type Risk = {
   category: string;
@@ -142,6 +244,14 @@ export type Wedge = {
   why_it_works: string;
   what_must_be_true: string[];
   expansion_path: string;
+  beachhead?: {
+    share: Range;
+    accounts: Range;
+    annual_revenue: Range;
+    provenance: string;
+    rationale: string;
+    fact_ids: string[];
+  };
 };
 export type Competitor = {
   name: string;
@@ -169,8 +279,10 @@ export type Source = {
   provider: string;
 };
 export type Unit = {
+  lifetime_label?: string;
+  payback_label?: string;
   arpu: number;
-  gross_margin: number;
+  gross_margin: number | null;
   cac: number;
   lifetime_months: number;
   ltv: number;
@@ -186,7 +298,32 @@ export type Simulation = {
   seed: number;
   method: string;
 };
+export type FinancialMetadata = {
+  business_model: string;
+  annualized_revenue_label: string;
+  customer_label: string;
+};
 export type Sections = {
+  market_insights?: {
+    growth: {
+      status: string;
+      cagr: number | null;
+      period_start: number | null;
+      period_end: number | null;
+      fact_ids: string[];
+      source_ids: string[];
+      method: string;
+    };
+    structure: {
+      status: string;
+      observations: {
+        text: string;
+        fact_ids: string[];
+        source_ids: string[];
+      }[];
+      unknowns: string[];
+    };
+  };
   assumptions?: Assumption[];
   market?: Record<
     "low" | "base" | "high",
@@ -205,6 +342,7 @@ export type Sections = {
     };
   };
   revenue?: {
+    metadata?: FinancialMetadata;
     scenarios: Record<string, Revenue>;
     simulation: Simulation;
     flags: string[];
@@ -224,6 +362,9 @@ export type Sections = {
     breakeven_month: number | null;
     runway_note: string;
     comparable_rounds: { note: string; source_id: string }[];
+    initial_cash?: number | null;
+    runway_months?: number | null;
+    runway_status?: string;
   };
   competitors?: {
     axis_x: string;
@@ -231,12 +372,33 @@ export type Sections = {
     competitors: Competitor[];
     crowdedness: string;
     incumbent_response: string;
+    feature_matrix?: {
+      features: string[];
+      rows: {
+        competitor: string;
+        cells: {
+          feature: string;
+          status: string;
+          value: string | null;
+          fact_ids: string[];
+          source_ids: string[];
+        }[];
+      }[];
+    };
   };
   wedges?: {
     items: Wedge[];
     weights: Record<string, number>;
     recommended: string;
-    stability: string;
+    stability:
+      | string
+      | {
+          method: string;
+          evaluations: { name: string; ranking: string[] }[];
+          top_agreement: number;
+          stable: boolean;
+          limitations: string | string[];
+        };
   };
   moat?: {
     type: string;
@@ -296,6 +458,8 @@ export type Analysis = {
     locale: string;
     horizon_months: number;
     geography: string;
+    business_model?: string;
+    initial_cash?: number | null;
   };
   progress?: Record<
     string,
@@ -318,6 +482,7 @@ export type Analysis = {
   public?: boolean;
 };
 export type ModelPreview = {
+  metadata?: FinancialMetadata;
   market: NonNullable<Sections["market"]>;
   scenarios: Record<string, Revenue>;
   unit_economics: Record<string, Unit>;

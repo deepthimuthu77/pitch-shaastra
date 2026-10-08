@@ -15,6 +15,21 @@ DEFAULTS = {
     "gross_margin": ("Gross margin", "fraction", (0.5, 0.7, 0.85)),
     "cac": ("Customer acquisition cost", "currency/account", (60, 150, 400)),
     "fixed_costs_month": ("Monthly fixed operating cost", "currency/month", (1000, 3000, 7000)),
+    "initial_cash": ("Starting available cash", "currency", None),
+    "units_per_customer_month": (
+        "Transactions or service units per active buyer per month",
+        "units/account/month",
+        (1, 2, 4),
+    ),
+    "take_rate": ("Marketplace commission", "fraction", (0.05, 0.15, 0.25)),
+    "unit_price": ("Price per sale, transaction or service unit", "currency/unit", (20, 50, 100)),
+    "unit_variable_cost": ("Direct cost per fulfilled unit", "currency/unit", (5, 15, 40)),
+    "capacity_units_month": ("Fulfilment capacity per month", "units/month", (100, 500, 2000)),
+    "repeat_purchase_monthly": (
+        "Monthly repeat purchase share of previous buyers",
+        "fraction",
+        (0, 0.05, 0.15),
+    ),
 }
 
 
@@ -39,13 +54,25 @@ def default_assumptions(inputs):
             entry["rationale"] += (
                 " INR defaults use an arbitrary planning scale, not a current foreign-exchange rate."
             )
-        if key == "arpu_month" and inputs.get("price_guess") is not None:
+        price_key = (
+            "arpu_month" if inputs.get("business_model", "subscription") == "subscription" else "unit_price"
+        )
+        if key == price_key and inputs.get("price_guess") is not None:
             price = inputs["price_guess"]
             entry.update(
                 value={"low": price * 0.8, "base": price, "high": price * 1.2},
                 provenance="founder",
                 rationale="Founder-provided price hypothesis with an illustrative uncertainty range.",
             )
+        if key == "initial_cash" and inputs.get("initial_cash") is not None:
+            cash = inputs["initial_cash"]
+            entry.update(
+                value={"low": cash, "base": cash, "high": cash},
+                provenance="founder",
+                rationale="Founder-provided available cash; runway is calculated against the cash trajectory.",
+            )
+        elif key == "initial_cash":
+            entry["rationale"] = "Starting cash is unknown; runway remains unavailable until you supply it."
         result.append(Assumption.model_validate(entry).model_dump())
     return result
 

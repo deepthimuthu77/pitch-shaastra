@@ -10,9 +10,14 @@ import {
   Trash2,
 } from "lucide-react";
 import { api, download, post } from "@/lib/api";
-import type { Pitch, Scorecard } from "@/lib/types";
+import type { Pitch, Scorecard, Trajectory } from "@/lib/types";
 import { Badge, Empty, ErrorBox, Loading, Metric } from "@/components/ui";
 import { TrendChart } from "@/components/charts";
+import { InterestTrajectory } from "@/components/coaching";
+import {
+  CohortComparisonView,
+  type CohortComparison,
+} from "@/components/cohort-comparison";
 type Analytics = {
   sessions: {
     id: string;
@@ -37,6 +42,22 @@ type Analytics = {
   }[];
   benchmark: { available: boolean; reason: string; real_session_count: number };
   interpretation: string;
+  readiness?: NonNullable<Pitch["report"]>["readiness"];
+  interest_trajectories?: {
+    pitch_id: string;
+    title: string;
+    points: Trajectory[];
+  }[];
+  retry_groups?: {
+    root_pitch_id: string;
+    attempts: {
+      id: string;
+      attempt: number;
+      score: number;
+      practice_category: string | null;
+    }[];
+  }[];
+  cohorts?: CohortComparison[];
 };
 
 export default function Dashboard() {
@@ -118,6 +139,64 @@ export default function Dashboard() {
               note="Synthetic data excluded"
             />
           </div>
+          {data.readiness && (
+            <section className="card">
+              <span className="eyebrow">LATEST ATTEMPT</span>
+              <h2>
+                {data.readiness.band} · readiness {data.readiness.score}/100
+              </h2>
+              <p>{data.readiness.method}</p>
+              <p>Evidence coverage: {data.readiness.coverage_percent}%</p>
+              <small>
+                {Array.isArray(data.readiness.limitations)
+                  ? data.readiness.limitations.join(" ")
+                  : data.readiness.limitations}
+              </small>
+            </section>
+          )}
+          {!!data.retry_groups?.length && (
+            <section className="card">
+              <h2>Attempts grouped by idea</h2>
+              {data.retry_groups.map((group) => (
+                <div className="retry-group" key={group.root_pitch_id}>
+                  <h3>
+                    {pitches.find((p) => p.id === group.root_pitch_id)?.title ||
+                      "Pitch attempts"}
+                  </h3>
+                  <div className="button-row">
+                    {group.attempts
+                      .sort((a, b) => a.attempt - b.attempt)
+                      .map((attempt) => (
+                        <Link
+                          className="button ghost"
+                          href={`/pitch/${attempt.id}/report`}
+                          key={attempt.id}
+                        >
+                          Attempt {attempt.attempt} · {attempt.score}/100
+                          {attempt.practice_category
+                            ? ` · ${attempt.practice_category} practice`
+                            : ""}
+                        </Link>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+          {!!data.interest_trajectories?.length && (
+            <section style={{ marginBlock: 24 }}>
+              <h2>How your answers changed investor interest</h2>
+              {data.interest_trajectories.map((session) => (
+                <details className="card" key={session.pitch_id}>
+                  <summary>{session.title}</summary>
+                  <InterestTrajectory
+                    rows={session.points}
+                    pitchId={session.pitch_id}
+                  />
+                </details>
+              ))}
+            </section>
+          )}
           {data.sessions.length ? (
             <section className="card dashboard-chart">
               <div className="card-heading">
@@ -276,7 +355,11 @@ export default function Dashboard() {
           <section className="card" style={{ marginTop: 25 }}>
             <h2>Benchmarks that don&apos;t pretend.</h2>
             <p>{data.benchmark.reason}</p>
-            <Badge tone="amber">No percentile fabricated</Badge>
+            <Badge tone={data.benchmark.available ? "green" : "amber"}>
+              {data.benchmark.available
+                ? "Consented aggregates available"
+                : "No percentile fabricated"}
+            </Badge>
             <p style={{ marginTop: 16 }}>
               Your own before-and-after comparisons are available now. Group
               benchmarks require a sufficiently sized, consented real cohort.
@@ -285,6 +368,9 @@ export default function Dashboard() {
               Cohort workspace <ArrowRight size={15} />
             </Link>
           </section>
+          {data.cohorts?.map((cohort) => (
+            <CohortComparisonView value={cohort} key={cohort.id} />
+          ))}
         </>
       )}
     </>

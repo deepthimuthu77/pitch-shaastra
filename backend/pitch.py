@@ -4,6 +4,15 @@ import time
 import uuid
 
 from backend.analysis.models import grounded
+from backend.coaching import (
+    AREAS,
+    answer_metrics,
+    build_tracker,
+    enrich_report,
+    next_category,
+    report_intelligence,
+    select_round,
+)
 from backend.config import settings
 from backend.llm.client import call_llm
 from backend.llm.schemas import AskResult, FinishResult
@@ -89,8 +98,10 @@ def demo_ask(pitch, answer):
     for phrase in ("huge market", "no competitors", "everyone needs this", "guaranteed success"):
         match = re.search(r"\b" + re.escape(phrase) + r"\b", answer, re.I)
         if match:
-            prefix = answer[max(0, match.start() - 40) : match.start()]
-            if not re.search(r"(?:not|never|don't|do not|avoid|claim|say|quote|rather than)\b", prefix, re.I):
+            prefix = answer[max(0, match.start() - 120) : match.start()]
+            if not re.search(
+                r"(?:not|never|don't|do not|avoid|example|hypothetical|rather than|if)\b", prefix, re.I
+            ):
                 flags.append(
                     {
                         "flag": "vague",
@@ -133,11 +144,11 @@ def demo_ask(pitch, answer):
                 "confidence": 0.99,
             }
         )
-    specific = len(answer.split()) >= 25
     evidence = bool(
         re.search(r"\b(?:interview|pilot|paid|tested|measured|experiment|customer|users)\b", answer, re.I)
     )
-    if has_numbers and evidence and specific and not flags:
+    measured_metrics = answer_metrics(answer, category, flags)
+    if measured_metrics["evidence_strength"] >= 80 and measured_metrics["specificity"] >= 80 and not flags:
         flags.append(
             {
                 "flag": "strong",
@@ -185,15 +196,7 @@ def demo_ask(pitch, answer):
         {
             "analysis": "The local rules inspect explicit claims, quantified examples and direct deflections. Unmeasured facts are treated as gaps rather than proof of failure.",
             "flags": flags[:5],
-            "answer_metrics": {
-                "question_category": category,
-                "directness": 20 if dodge else 70 if specific else 45,
-                "specificity": 80 if has_numbers and specific else 55 if specific else 30,
-                "evidence_strength": 75 if evidence and has_numbers else 45 if evidence else 20,
-                "numeric_claims": [],
-                "vague_phrases": [f["quote"] for f in flags if f["flag"] == "vague"],
-                "weakness_tags": [category] if penalty > 0 else [],
-            },
+            "answer_metrics": answer_metrics(answer, category, flags),
             "investors": [
                 {
                     "id": p["id"],
@@ -234,15 +237,47 @@ def gate_flags(result, answer, question_category):
     for flag in result.flags:
         if flag.quote not in answer or flag.confidence < 0.8:
             continue
+        if flag.flag in {"vague", "unrealistic"}:
+            before = answer[max(0, answer.find(flag.quote) - 120) : answer.find(flag.quote)]
+            if re.search(
+                r"\b(?:not|never|don't|do not|avoid|example|hypothetical|rather than|if)\b", before, re.I
+            ):
+                continue
+        position = answer.find(flag.quote)
+        prefix = answer[max(0, position - 70) : position]
+        if flag.flag in {"vague", "unrealistic", "strong"} and re.search(
+            r"\b(?:not|never|don['’]t|do not|hypothetically|hypothetical|suppose|if|quote|claim|said|rather than)\b",
+            prefix,
+            re.I,
+        ):
+            continue
         if flag.flag == "no_numbers" and question_category not in {"market", "unit_economics", "funding_use"}:
             continue
-        if flag.flag in {"dodged", "no_numbers"} and re.search(
+        if flag.flag == "no_numbers" and re.search(
             r"not (?:yet )?measured|don't know|do not know|need to validate", answer, re.I
         ):
             continue
         accepted.append(flag)
     result.flags = accepted
     return result
+
+
+def ground_challenges(reactions, messages):
+    for reaction in reactions:
+        target = reaction.get("challenges")
+        candidates = [m for m in messages if m.get("speaker") == target]
+        if target == reaction["id"] or not candidates:
+            reaction.update(challenges=None, challenge_message_id=None, challenged_quote=None)
+            continue
+        referenced = next(
+            (m for m in candidates if m.get("id") == reaction.get("challenge_message_id")),
+            candidates[-1],
+        )
+        quote = reaction.get("challenged_quote")
+        reaction["challenge_message_id"] = referenced["id"]
+        reaction["challenged_quote"] = (
+            quote if quote and quote in referenced["text"] else referenced["text"][:350]
+        )
 
 
 async def ask_investors(pitch, answer, grounding=None):
@@ -258,18 +293,33 @@ async def ask_investors(pitch, answer, grounding=None):
                     "content": json.dumps(
                         {
                             "idea": pitch["idea"],
+                            "funding_ask": pitch.get("funding_ask"),
+                            "equity_offered": pitch.get("equity_offered"),
+                            "currency": pitch.get("inputs", {}).get("currency", "USD"),
                             "round": pitch["round"],
                             "last_question": pitch.get("next_question"),
-                            "transcript": pitch["messages"][-30:],
+                            "transcript": [
+                                {k: m[k] for k in ("id", "speaker", "text") if k in m}
+                                for m in pitch["messages"][-30:]
+                            ],
                             "latest_answer": answer,
                             "investor_state": pitch["investor_state"],
-                            "research": grounding,
+                            "research": {
+                                k: grounding[k]
+                                for k in ("facts", "competitors", "claim_check", "warnings")
+                                if k in grounding
+                            }
+                            if grounding
+                            else None,
+                            "weakness_tracker": build_tracker(pitch),
+                            "practice_category": pitch.get("practice_category"),
                         }
                     ),
                 }
             ],
             schema=AskResult,
             effort="high" if pitch["round"] == "deepdive" else "medium",
+            max_tokens=2600,
         )
         result, meta = out["data"], out["meta"]
     gate_flags(result, answer, (pitch.get("next_question") or {}).get("category", "product"))
@@ -279,45 +329,71 @@ async def ask_investors(pitch, answer, grounding=None):
         investor.status = (
             "interested" if investor.interest >= 65 else "out" if investor.interest < 30 else "doubtful"
         )
-    return result.model_dump(), meta
-
-
-def demo_finish(pitch):
-    founder = [m for m in pitch["messages"] if m["speaker"] == "founder"]
-    metrics = [m["metrics"] for m in founder if m.get("metrics")]
-
-    def mean(key):
-        return round(sum(m[key] for m in metrics) / len(metrics)) if metrics else 30
-
-    score = {
-        "team": 45,
-        "market": mean("specificity"),
-        "traction": mean("evidence_strength"),
-        "model": mean("specificity"),
-        "defensibility": 40,
-        "clarity": mean("directness"),
+    data = result.model_dump()
+    latest = {
+        "id": None,
+        "speaker": "founder",
+        "text": answer,
+        "flags": data["flags"],
+        "metrics": data["answer_metrics"],
+        "question": pitch.get("next_question", {}).get("text", "Opening pitch"),
     }
-    quote = founder[-1]["text"][:350] if founder else pitch["idea"][:350]
+    tracker = build_tracker(pitch, latest, (grounding or {}).get("claim_check", pitch.get("claim_check", [])))
+    chosen, focus = next_category(pitch, tracker)
+    prior_questions = {
+        m.get("question", "") for m in pitch.get("messages", []) if m.get("speaker") == "founder"
+    }
+    proposed = data["next_question"]
+    if proposed["category"] != chosen or proposed["text"] in prior_questions:
+        proposed = question(chosen)
+        if tracker[chosen]["attempts"]:
+            proposed["text"] = (
+                f"Follow-up {tracker[chosen]['attempts']}: {AREAS[chosen][3]} What evidence or validation plan addresses this gap?"
+            )
+    proposed["reason"] = (
+        f"{AREAS[chosen][0]}: category score {tracker[chosen]['score']}/100; " + AREAS[chosen][3]
+    )
+    proposed["context_message_id"] = tracker[chosen]["latest_message_id"]
+    data.update(
+        next_question=proposed,
+        weakness_tracker=tracker,
+        deep_dive_focus=focus,
+        suggested_round=select_round(pitch, tracker),
+        trajectory_point={
+            "answer_index": pitch.get("answer_count", 0) + (1 if pitch.get("messages") else 0),
+            "message_id": None,
+            "interest": {i.id: i.interest for i in result.investors},
+            "timestamp": time.time(),
+        },
+    )
+    ground_challenges(data["investors"], pitch.get("messages", []))
+    return data, meta
+
+
+def demo_finish(pitch, claim_checks=None):
+    founder = [m for m in pitch["messages"] if m["speaker"] == "founder"]
+    intelligence = report_intelligence(pitch, claim_checks)
+    score = intelligence["scorecard"]
+    plans = intelligence["improvement_plan"]
+    conflicted = {
+        c.get("message_id")
+        for c in claim_checks or []
+        if c.get("verdict") == "contradicted"
+        and (c.get("maps_to") == "competition" or c.get("independently_verified"))
+    }
+    evidence_sections = [m["text"][:220] for m in founder[-3:] if m.get("id") not in conflicted]
+    if not evidence_sections:
+        evidence_sections = ["[validate: reconcile the disputed statements before presenting them as facts]"]
     return FinishResult.model_validate(
         {
             "analysis": "This report uses transparent local heuristics. The founder supplied the quoted statements; missing validation is presented as an action, not a discovered fact.",
             "scorecard": score,
             "weaknesses": [
                 {
-                    "title": "Validate willingness to pay",
-                    "evidence": quote,
-                    "action": "Run customer interviews and a paid pilot. Record the segment, time period and actual behavior.",
-                },
-                {
-                    "title": "Build a defensible operating model",
-                    "evidence": founder[0]["text"][:350],
-                    "action": "Separate estimated price, delivery costs and acquisition cost. Replace estimates with a measured experiment.",
-                },
-                {
-                    "title": "Demonstrate a narrow advantage",
-                    "evidence": founder[0]["text"][:350],
-                    "action": "Choose a reachable beachhead and compare its current workflow, including doing nothing, against your offer.",
-                },
+                    key: item[key]
+                    for key in ("title", "evidence", "action", "category", "message_id", "why_it_matters")
+                }
+                for item in plans[:3]
             ],
             "verdicts": [
                 {
@@ -328,37 +404,87 @@ def demo_finish(pitch):
                 }
                 for p in PANEL
             ],
-            "rewritten_pitch": "We are building "
-            + pitch["idea"][:450]
-            + " Our first customer segment is [validate a specific segment]. We will test the pain through [customer interviews and a paid pilot]. Our price and acquisition cost are [validate measured economics]. Customers currently use [validate alternatives]. Our first milestone is [define a measurable outcome]. We will manage privacy and misuse through [define safeguards].",
+            "rewritten_pitch": "Founder statements awaiting verification: "
+            + " ".join(evidence_sections)
+            + " Next validation milestones: "
+            + " ".join("[validate: " + item["success_criterion"] + "]" for item in plans[:3]),
             "prep_sheet": [
                 {
-                    "question": text,
-                    "suggested_answer": "Use a measured example from your own work. State what you know, what remains an assumption, and the experiment you will run next. Do not substitute an invented statistic for missing evidence.",
+                    "question": question(item["category"])["text"],
+                    "suggested_answer": "Known founder statement: "
+                    + item["evidence"][:250]
+                    + " Clearly state what remains unmeasured. "
+                    + item["action"]
+                    + " Success criterion: "
+                    + item["success_criterion"],
                 }
-                for _, text in list(QUESTIONS.values())[:5]
+                for item in plans[:5]
             ],
         }
     )
 
 
-async def finish_pitch(pitch, grounding=None):
+async def finish_pitch(pitch, grounding=None, claim_checks=None):
     started = time.perf_counter()
     if settings().app_mode == "demo":
-        result, meta = demo_finish(pitch), demo_meta(started)
+        result, meta = demo_finish(pitch, claim_checks), demo_meta(started)
     else:
         out = await call_llm(
             system=FINISH_PROMPT,
-            messages=[{"role": "user", "content": json.dumps({"pitch": pitch, "research": grounding})}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "pitch": {
+                                k: pitch[k]
+                                for k in (
+                                    "idea",
+                                    "funding_ask",
+                                    "equity_offered",
+                                    "investor_state",
+                                    "difficulty",
+                                )
+                            },
+                            "transcript": [
+                                {k: m[k] for k in ("id", "speaker", "text") if k in m}
+                                for m in pitch["messages"]
+                            ],
+                            "research": {
+                                k: grounding.get("sections", {}).get(k) for k in ("facts", "competitors")
+                            }
+                            if grounding
+                            else None,
+                            "claim_checks": claim_checks or [],
+                            "rubric": {
+                                k: v
+                                for k, v in report_intelligence(pitch, claim_checks).items()
+                                if k in {"scorecard", "scoring_anchors"}
+                            },
+                        }
+                    ),
+                }
+            ],
             schema=FinishResult,
             effort="high",
+            max_tokens=4000,
         )
         result, meta = out["data"], out["meta"]
     founder_text = "\n".join(m["text"] for m in pitch["messages"] if m["speaker"] == "founder")
+    contradicted_quotes = [
+        c.get("quote", "")
+        for c in claim_checks or []
+        if c.get("verdict") == "contradicted"
+        and (c.get("maps_to") == "competition" or c.get("independently_verified"))
+    ]
     if not grounded(result.rewritten_pitch, founder_text + pitch["idea"]):
-        result.rewritten_pitch = demo_finish(pitch).rewritten_pitch
+        result.rewritten_pitch = demo_finish(pitch, claim_checks).rewritten_pitch
+    if any(quote and quote.casefold() in result.rewritten_pitch.casefold() for quote in contradicted_quotes):
+        result.rewritten_pitch = demo_finish(pitch, claim_checks).rewritten_pitch
     for item in result.prep_sheet:
-        if not grounded(item.suggested_answer, founder_text + pitch["idea"]):
+        if not grounded(item.suggested_answer, founder_text + pitch["idea"]) or any(
+            quote and quote.casefold() in item.suggested_answer.casefold() for quote in contradicted_quotes
+        ):
             item.suggested_answer = "State your own measured evidence and clearly label assumptions. The generated answer contained an unsupported number and was withheld."
     for weakness in result.weaknesses:
         if weakness.evidence not in founder_text:
@@ -371,10 +497,14 @@ async def finish_pitch(pitch, grounding=None):
     data["dodged"] = [
         {"question": m.get("question", ""), "answer": m["text"], "message_id": m["id"]}
         for m in pitch["messages"]
-        if m["speaker"] == "founder" and any(f["flag"] == "dodged" for f in m.get("flags", []))
+        if m["speaker"] == "founder"
+        and any(
+            f["flag"] == "dodged" and f.get("review", {}).get("decision") != "dismiss"
+            for f in m.get("flags", [])
+        )
     ]
-    data["overall_score"] = round(sum(data["scorecard"].values()) / 6)
-    return data, meta
+    data["model_scorecard"] = data["scorecard"]
+    return enrich_report(pitch, data, claim_checks), meta
 
 
 def message(speaker, text, **extras):

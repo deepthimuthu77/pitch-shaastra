@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     max_sessions_per_day: int = 30
     llm_timeout: int = 25
     llm_total_timeout: int = 65
+    inline_worker: bool = False
+    worker_poll_seconds: int = 30
 
     def validate_runtime(self):
         if self.app_mode not in {"demo", "live"}:
@@ -44,6 +46,8 @@ class Settings(BaseSettings):
             raise ValueError("Emulator credentials cannot be used in live mode")
         if "*" in self.allowed_origins:
             raise ValueError("Use explicit ALLOWED_ORIGINS")
+        if not 1 <= self.worker_poll_seconds <= 300:
+            raise ValueError("WORKER_POLL_SECONDS must be between 1 and 300")
 
 
 @lru_cache

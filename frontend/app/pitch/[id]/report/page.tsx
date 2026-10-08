@@ -13,6 +13,8 @@ import {
   Thinking,
 } from "@/components/ui";
 import { ScoreChart } from "@/components/charts";
+import { ImprovementLoop, RewriteDiff } from "@/components/coaching";
+import { motion, useReducedMotion } from "framer-motion";
 
 export default function PitchReport({
   params,
@@ -20,6 +22,7 @@ export default function PitchReport({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const reducedMotion = useReducedMotion();
   const [pitch, setPitch] = useState<Pitch>();
   const [config, setConfig] = useState<Config>();
   const [error, setError] = useState("");
@@ -144,7 +147,17 @@ export default function PitchReport({
             {report.verdicts.map((v) => {
               const member = config.panel.find((p) => p.id === v.id)!;
               return (
-                <div key={v.id} className="verdict">
+                <motion.div
+                  key={v.id}
+                  className="verdict"
+                  initial={{ opacity: reducedMotion ? 1 : 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{
+                    delay: reducedMotion
+                      ? 0
+                      : report.verdicts.indexOf(v) * 0.25,
+                  }}
+                >
                   <Avatar member={member} size={50} />
                   <div>
                     <strong>{member.name}</strong>
@@ -165,12 +178,16 @@ export default function PitchReport({
                     </Badge>
                     <p>{v.reason}</p>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         </section>
       </div>
+      <Link className="button secondary no-print" href={`/pitch/${id}/deal`}>
+        Return to the negotiation room
+      </Link>
+      <ImprovementLoop pitch={pitch} />
       <div className="section-heading">
         <div>
           <span className="eyebrow">YOUR THREE HIGHEST-PRIORITY GAPS</span>
@@ -207,16 +224,11 @@ export default function PitchReport({
             Copy pitch
           </button>
         </div>
-        <div className="rewrite-grid">
-          <div>
-            <Badge>Original</Badge>
-            <p>{pitch.idea}</p>
-          </div>
-          <div>
-            <Badge tone="green">Rewritten · validate placeholders</Badge>
-            <p>{report.rewritten_pitch}</p>
-          </div>
-        </div>
+        <RewriteDiff
+          before={pitch.idea}
+          after={report.rewritten_pitch}
+          changes={report.rewrite_changes}
+        />
         <small>
           Square-bracket placeholders identify missing evidence. No traction or
           market figures are invented.
@@ -276,6 +288,21 @@ export default function PitchReport({
         </section>
       </div>
       <Thinking busy={false} meta={pitch.llm_meta} />
+      <details className="card">
+        <summary>Review the submitted evidence</summary>
+        {pitch.messages
+          .filter((m) => m.speaker === "founder")
+          .map((m) => (
+            <article
+              className="message founder"
+              id={`message-${m.id}`}
+              key={m.id}
+            >
+              <strong>{m.question || "Opening pitch"}</strong>
+              <p>{m.text}</p>
+            </article>
+          ))}
+      </details>
       {error && <ErrorBox error={error} />}
       <div className="next-step-banner">
         <div>

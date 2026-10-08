@@ -9,16 +9,40 @@ import {
 } from "firebase/auth";
 import type { Config } from "./types";
 
-export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API =
+  process.env.NEXT_PUBLIC_API_URL === "same-origin"
+    ? ""
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 let cachedConfig: Config | undefined;
 let guestPromise: Promise<string> | undefined;
+let liveGuestPromise: Promise<string> | undefined;
+let assistedGuest: { token: string; expires: number } | undefined;
+
+async function serverGuest(): Promise<string> {
+  if (assistedGuest && assistedGuest.expires > Date.now())
+    return assistedGuest.token;
+  const response = await fetch(`${API}/api/auth/firebase-guest`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Firebase guest sign-in unavailable.");
+  }
+  const data = await response.json();
+  assistedGuest = {
+    token: data.token,
+    expires: Date.now() + data.expires_in * 1000,
+  };
+  return data.token;
+}
 
 export async function getConfig(): Promise<Config> {
   if (cachedConfig) return cachedConfig;
   const response = await fetch(`${API}/api/config`, { cache: "no-store" });
   if (!response.ok)
     throw new Error(
-      "Backend unavailable. Start Docker Compose or the native launcher.",
+      "Backend unavailable. A free hosted server may be waking up; retry shortly. For local use, start Docker Compose or the native launcher.",
     );
   cachedConfig = await response.json();
   return cachedConfig!;
@@ -32,6 +56,11 @@ function firebase(config: Config) {
 export async function login(google = false) {
   const config = await getConfig();
   if (config.mode === "demo") return token();
+  if (!google) return token();
+  if (assistedGuest)
+    throw new Error(
+      "This browser is using server-assisted Firebase guest sign-in. Google account linking requires direct Firebase connectivity; keep this guest session until connectivity is restored.",
+    );
   const auth = firebase(config);
   await auth.authStateReady();
   const result = google
@@ -47,9 +76,22 @@ export async function login(google = false) {
 async function token(): Promise<string> {
   const config = await getConfig();
   if (config.mode === "live") {
+    if (assistedGuest) return serverGuest();
     const auth = firebase(config);
     await auth.authStateReady();
-    if (!auth.currentUser) await signInAnonymously(auth);
+    if (!auth.currentUser) {
+      if (!liveGuestPromise)
+        liveGuestPromise = signInAnonymously(auth)
+          .then((result) => result.user.getIdToken())
+          .catch((error: { code?: string }) => {
+            if (error.code !== "auth/network-request-failed") throw error;
+            return serverGuest();
+          })
+          .finally(() => {
+            liveGuestPromise = undefined;
+          });
+      return liveGuestPromise;
+    }
     return auth.currentUser!.getIdToken();
   }
   const current = localStorage.getItem("pitchgrill-guest");
@@ -90,6 +132,7 @@ export async function api<T>(
     else {
       const auth = firebase(config);
       if (auth.currentUser) await auth.currentUser.getIdToken(true);
+      if (assistedGuest) assistedGuest.expires = 0;
     }
     return api(path, init, false);
   }
@@ -128,6 +171,12 @@ export async function download(path: string, filename: string) {
 export async function logout() {
   const config = await getConfig();
   if (config.mode === "live") await signOut(firebase(config));
+  if (config.mode === "live")
+    await fetch(`${API}/api/auth/firebase-guest/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  assistedGuest = undefined;
   localStorage.removeItem("pitchgrill-guest");
 }
 

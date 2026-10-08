@@ -11,6 +11,28 @@
         "review-ownership.json"
       ],
       "related_to": null
+    },
+    "pitchgrill-backend": {
+      "author": 1,
+      "assignment_basis": "Explicit user assignment: backend implementation belongs to Soumik",
+      "weight": 3,
+      "scopes": ["backend/**", "firebase.json", "firestore.indexes.json", "firestore.rules", "docs/architecture.md"],
+      "exclude_scopes": ["backend/requirements-dev.txt"],
+      "related_to": null
+    },
+    "pitchgrill-backend-tests": {
+      "author": 2,
+      "weight": 1,
+      "assignment_basis": "Explicit user assignment: backend tests belong to Deepthi",
+      "scopes": ["tests/**", "pyproject.toml", "backend/requirements-dev.txt", "scripts/bakeoff.py"],
+      "related_to": "pitchgrill-backend"
+    },
+    "pitchgrill-frontend": {
+      "author": 2,
+      "weight": 3,
+      "assignment_basis": "Explicit user assignment: the whole frontend and frontend tests belong to Deepthi",
+      "scopes": ["frontend/**"],
+      "related_to": null
     }
   }
 }

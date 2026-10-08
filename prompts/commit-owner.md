@@ -8,6 +8,10 @@ The registry is shared assignment bookkeeping: an entry update travels with the
 feature it assigns, without transferring ownership of other registered features.
 
 Decide in this order:
+- Explicit user assignments recorded in the registry override balance. Backend
+  implementation belongs to author 1; backend tests, all frontend work and frontend
+  tests belong to author 2. Do not redistribute these responsibilities.
+  Specific test/tooling scopes override broader backend directory scopes.
 - Existing feature/module owner wins. Its fixes, tests, refactors, and code-quality
   changes stay with that person. Do not reassign related work to improve balance.
 - For new independent work, choose the person with less estimated review effort;

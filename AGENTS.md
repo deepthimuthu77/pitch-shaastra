@@ -2,6 +2,10 @@
 
 ## Commit ownership
 
+The user has explicitly assigned backend implementation to Soumik, and all backend
+tests, the entire frontend and frontend tests to Deepthi. These assignments
+override balancing decisions. Keep related fixes with the assigned owner.
+
 Before every commit, invoke a decision agent using `prompts/commit-owner.md`.
 Supply only the proposed diff, feature key, `review-ownership.json`, and relevant
 local history. Use a small, low-cost agent for this narrow decision. The main

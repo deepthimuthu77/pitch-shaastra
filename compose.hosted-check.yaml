@@ -1,0 +1,40 @@
+name: pitchgrill-hosted-check
+services:
+  api:
+    image: pitchgrill-render:local
+    build:
+      context: .
+      dockerfile: deploy/render.Dockerfile
+    environment:
+      APP_MODE: demo
+      STORAGE_BACKEND: sqlite
+      ALLOWED_ORIGINS: http://localhost:3001
+      PUBLIC_APP_URL: http://localhost:3001
+    ports: ["127.0.0.1:8001:8000"]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    mem_limit: 512m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: same-origin
+        API_INTERNAL_URL: http://api:8000
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      NEXT_PUBLIC_API_URL: same-origin
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 384m
+    init: true
